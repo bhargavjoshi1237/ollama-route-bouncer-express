@@ -46,10 +46,19 @@ function parseCurlCommand(curlStr) {
 // Load profiles from file
 function loadProfiles() {
   if (!fs.existsSync(PROFILE_PATH)) return [];
-  const lines = fs.readFileSync(PROFILE_PATH, "utf-8").split("\n").filter(Boolean);
-  return lines.map(line => {
-    try { return JSON.parse(line); } catch { return null; }
-  }).filter(Boolean);
+  const lines = fs
+    .readFileSync(PROFILE_PATH, "utf-8")
+    .split("\n")
+    .filter(Boolean);
+  return lines
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 }
 
 // Save profile to file
@@ -59,43 +68,58 @@ function saveProfile(profile) {
 
 // Helper to clear terminal (cross-platform)
 function clearTerminal() {
-  process.stdout.write(process.platform === "win32" ? "\x1Bc" : "\x1b[2J\x1b[0f");
+  process.stdout.write(
+    process.platform === "win32" ? "\x1Bc" : "\x1b[2J\x1b[0f"
+  );
 }
 
 // CLI interface for profile selection/creation
 async function selectProfile() {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   let profiles = loadProfiles().filter(
-    p => p && p.url && p.headers && p.headers.authorization && p.chat_id
+    (p) => p && p.url && p.headers && p.headers.authorization && p.chat_id
   );
   while (true) {
     console.log("==== Qwen Proxy Profile Manager ====");
     if (profiles.length === 0) {
-      console.log("No valid profiles found. You must set up a new profile to continue.");
-      console.log("Please use 'Copy as cURL (bash)' from your browser's DevTools.");
+      console.log(
+        "No valid profiles found. You must set up a new profile to continue."
+      );
+      console.log(
+        "Please use 'Copy as cURL (bash)' from your browser's DevTools."
+      );
       console.log("1. Go to https://chat.qwen.ai and start a new chat.");
-      console.log("2. Open DevTools > Network tab, send a message, find the 'completions' API request.");
+      console.log(
+        "2. Open DevTools > Network tab, send a message, find the 'completions' API request."
+      );
       console.log("3. Right-click it, 'Copy as cURL (bash)', and paste below.");
-      const curlStr = await new Promise(res => rl.question("Paste the cURL command here:\n", res));
+      const curlStr = await new Promise((res) =>
+        rl.question("Paste the cURL command here:\n", res)
+      );
       clearTerminal();
       const parsed = parseCurlCommand(curlStr);
       if (!parsed) {
         console.log("❌ Failed to parse cURL command. Please try again.\n");
         continue;
       }
-      const name = await new Promise(res => rl.question("Enter a name for this profile: ", res));
+      const name = await new Promise((res) =>
+        rl.question("Enter a name for this profile: ", res)
+      );
       const profile = {
         name: name.trim() || "Unnamed Profile",
         url: parsed.url,
         headers: parsed.headers,
         chat_id: parsed.chat_id,
         folder_id: null, // will be set later if needed
-        original_chat_id: parsed.chat_id // store original chat id
+        original_chat_id: parsed.chat_id, // store original chat id
       };
       saveProfile(profile);
       console.log(`✅ Profile '${profile.name}' saved.`);
       profiles = loadProfiles().filter(
-        p => p && p.url && p.headers && p.headers.authorization && p.chat_id
+        (p) => p && p.url && p.headers && p.headers.authorization && p.chat_id
       );
       continue;
     }
@@ -104,35 +128,49 @@ async function selectProfile() {
       console.log(`[${i + 1}] ${p.name || "Unnamed Profile"}`);
     });
     console.log("[N] Create a new profile");
-    const answer = await new Promise(res => rl.question(
-      "Select a profile number to continue, or type 'N' to create a new profile: ", res
-    ));
-    if (answer.trim().toLowerCase() === "n" || answer.trim().toLowerCase() === "new") {
+    const answer = await new Promise((res) =>
+      rl.question(
+        "Select a profile number to continue, or type 'N' to create a new profile: ",
+        res
+      )
+    );
+    if (
+      answer.trim().toLowerCase() === "n" ||
+      answer.trim().toLowerCase() === "new"
+    ) {
       // New profile creation flow
-      console.log("Please use 'Copy as cURL (bash)' from your browser's DevTools.");
+      console.log(
+        "Please use 'Copy as cURL (bash)' from your browser's DevTools."
+      );
       console.log("1. Go to https://chat.qwen.ai and start a new chat.");
-      console.log("2. Open DevTools > Network tab, send a message, find the 'completions' API request.");
+      console.log(
+        "2. Open DevTools > Network tab, send a message, find the 'completions' API request."
+      );
       console.log("3. Right-click it, 'Copy as cURL (bash)', and paste below.");
-      const curlStr = await new Promise(res => rl.question("Paste the cURL command here:\n", res));
+      const curlStr = await new Promise((res) =>
+        rl.question("Paste the cURL command here:\n", res)
+      );
       clearTerminal();
       const parsed = parseCurlCommand(curlStr);
       if (!parsed) {
         console.log("❌ Failed to parse cURL command. Please try again.\n");
         continue;
       }
-      const name = await new Promise(res => rl.question("Enter a name for this profile: ", res));
+      const name = await new Promise((res) =>
+        rl.question("Enter a name for this profile: ", res)
+      );
       const profile = {
         name: name.trim() || "Unnamed Profile",
         url: parsed.url,
         headers: parsed.headers,
         chat_id: parsed.chat_id,
         folder_id: null,
-        original_chat_id: parsed.chat_id
+        original_chat_id: parsed.chat_id,
       };
       saveProfile(profile);
       console.log(`✅ Profile '${profile.name}' saved.`);
       profiles = loadProfiles().filter(
-        p => p && p.url && p.headers && p.headers.authorization && p.chat_id
+        (p) => p && p.url && p.headers && p.headers.authorization && p.chat_id
       );
       continue;
     }
@@ -154,13 +192,17 @@ async function listChats(profile) {
       headers: {
         ...profile.headers,
         accept: "application/json",
-        "content-type": "application/json"
-      }
+        "content-type": "application/json",
+      },
     });
     const data = await resp.json();
     if (data && data.success && Array.isArray(data.data)) {
-      data.data.forEach(chat => {
-        console.log(`- [${chat.id}] "${chat.title}" (created: ${new Date(chat.created_at * 1000).toLocaleString()})`);
+      data.data.forEach((chat) => {
+        console.log(
+          `- [${chat.id}] "${chat.title}" (created: ${new Date(
+            chat.created_at * 1000
+          ).toLocaleString()})`
+        );
       });
     } else {
       console.log("❌ Failed to fetch chats.");
@@ -179,12 +221,12 @@ async function getOrCreateFolder(profile) {
       headers: {
         ...profile.headers,
         accept: "application/json",
-        "content-type": "application/json"
-      }
+        "content-type": "application/json",
+      },
     });
     const data = await resp.json();
     if (data && data.success && Array.isArray(data.data)) {
-      const found = data.data.find(f => f.name === "Product 1");
+      const found = data.data.find((f) => f.name === "Product 1");
       if (found) {
         console.log(`📁 Found folder "Product 1" with id: ${found.id}`);
         return found.id;
@@ -200,9 +242,9 @@ async function getOrCreateFolder(profile) {
       headers: {
         ...profile.headers,
         accept: "application/json",
-        "content-type": "application/json"
+        "content-type": "application/json",
       },
-      body: JSON.stringify({ name: "Product 1" })
+      body: JSON.stringify({ name: "Product 1" }),
     });
     const data = await resp.json();
     if (data && data.success && data.data && data.data.id) {
@@ -218,15 +260,18 @@ async function getOrCreateFolder(profile) {
 // Assign chat to folder
 async function assignChatToFolder(profile, chat_id, folder_id) {
   try {
-    const resp = await fetch(`https://chat.qwen.ai/api/v2/chats/${chat_id}/folder`, {
-      method: "POST",
-      headers: {
-        ...profile.headers,
-        accept: "application/json",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({ folder_id })
-    });
+    const resp = await fetch(
+      `https://chat.qwen.ai/api/v2/chats/${chat_id}/folder`,
+      {
+        method: "POST",
+        headers: {
+          ...profile.headers,
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ folder_id }),
+      }
+    );
     const data = await resp.json();
     if (data && data.success) {
       console.log(`✅ Assigned chat ${chat_id} to folder ${folder_id}`);
@@ -252,21 +297,37 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
   const QWEN_AUTH_TOKEN = activeProfile.headers.authorization;
 
   // Ask user for next action: continue, create new, or list chats
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise(res =>
-    rl.question("Choose an option: [1] Continue in original chat, [2] Create new chat, [L] List chats: ", res)
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await new Promise((res) =>
+    rl.question(
+      "Choose an option: [1] Continue in original chat, [2] Create new chat, [L] List chats: ",
+      res
+    )
   );
   if (answer.trim().toLowerCase() === "l") {
     await listChats(activeProfile);
-    const chatId = await new Promise(res => rl.question("Enter chat id to continue in, or press Enter to skip: ", res));
+    const chatId = await new Promise((res) =>
+      rl.question("Enter chat id to continue in, or press Enter to skip: ", res)
+    );
     if (chatId && chatId.trim()) {
       activeProfile.chat_id = chatId.trim();
       // Save the update
       let profiles = loadProfiles();
-      profiles = profiles.map(p => p.name === activeProfile.name ? activeProfile : p);
-      fs.writeFileSync(PROFILE_PATH, profiles.map(p => JSON.stringify(p)).join("\n") + "\n");
+      profiles = profiles.map((p) =>
+        p.name === activeProfile.name ? activeProfile : p
+      );
+      fs.writeFileSync(
+        PROFILE_PATH,
+        profiles.map((p) => JSON.stringify(p)).join("\n") + "\n"
+      );
       QWEN_CHAT_ID = activeProfile.chat_id;
-      QWEN_API = activeProfile.url.replace(/chat_id=([a-z0-9-]+)/i, `chat_id=${QWEN_CHAT_ID}`);
+      QWEN_API = activeProfile.url.replace(
+        /chat_id=([a-z0-9-]+)/i,
+        `chat_id=${QWEN_CHAT_ID}`
+      );
       console.log(`Using chat_id: ${QWEN_CHAT_ID}`);
     }
     rl.close();
@@ -300,17 +361,29 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
       const data = await resp.json();
       if (data && data.success && data.data && data.data.id) {
         QWEN_CHAT_ID = data.data.id;
-        QWEN_API = activeProfile.url.replace(/chat_id=([a-z0-9-]+)/i, `chat_id=${QWEN_CHAT_ID}`);
+        QWEN_API = activeProfile.url.replace(
+          /chat_id=([a-z0-9-]+)/i,
+          `chat_id=${QWEN_CHAT_ID}`
+        );
         activeProfile.chat_id = QWEN_CHAT_ID;
         // Save original chat id and folder id in profile
         activeProfile.original_chat_id = QWEN_CHAT_ID;
         if (activeProfile.folder_id) {
-          await assignChatToFolder(activeProfile, QWEN_CHAT_ID, activeProfile.folder_id);
+          await assignChatToFolder(
+            activeProfile,
+            QWEN_CHAT_ID,
+            activeProfile.folder_id
+          );
         }
         // Update profile in file
         let profiles = loadProfiles();
-        profiles = profiles.map(p => p.name === activeProfile.name ? activeProfile : p);
-        fs.writeFileSync(PROFILE_PATH, profiles.map(p => JSON.stringify(p)).join("\n") + "\n");
+        profiles = profiles.map((p) =>
+          p.name === activeProfile.name ? activeProfile : p
+        );
+        fs.writeFileSync(
+          PROFILE_PATH,
+          profiles.map((p) => JSON.stringify(p)).join("\n") + "\n"
+        );
         console.log(`✅ Created new chat. Using chat_id: ${QWEN_CHAT_ID}`);
       } else {
         console.log("❌ Failed to create new chat. Using original chat_id.");
@@ -334,19 +407,17 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
   const conversationState = new Map();
 
   // Mock Ollama API endpoints for Copilot integration
-  app.get("/api/version", (req, res) => {
-    res.json({ version: "0.6.4" });
-  });
-
   app.get("/api/tags", (req, res) => {
     res.json({
       models: [
         {
-          name: "qwen3-235b-a22b",
-          model: "qwen3-235b-a22b",
+          name: "qwen3-normal",
+          model: "qwen3-normal",
+          display_name: "Qwen3 Normal",
+          tags: ["normal", "standard"],
           modified_at: new Date().toISOString(),
           size: 235000000000,
-          digest: "sha256:mock-digest",
+          digest: "sha256:mock-digest-normal",
           details: {
             parent_model: "",
             format: "gguf",
@@ -354,6 +425,25 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
             families: ["qwen"],
             parameter_size: "235B",
             quantization_level: "Q4_0",
+            description: "Standard Qwen3 model for normal responses",
+          },
+        },
+        {
+          name: "qwen3-thinking",
+          model: "qwen3-thinking", 
+          display_name: "Qwen3 Thinking",
+          tags: ["thinking", "reasoning", "cot"],
+          modified_at: new Date().toISOString(),
+          size: 235000000000,
+          digest: "sha256:mock-digest-thinking",
+          details: {
+            parent_model: "",
+            format: "gguf",
+            family: "qwen",
+            families: ["qwen"],
+            parameter_size: "235B",
+            quantization_level: "Q4_0",
+            description: "Qwen3 model with visible thinking process and reasoning",
           },
         },
       ],
@@ -361,15 +451,27 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
   });
 
   app.post("/api/show", (req, res) => {
-    const modelId = req.body?.model || "qwen3-235b-a22b";
+    const modelId = req.body?.model || "qwen3-normal";
+    const isThinking = modelId.includes("thinking");
+    const modelName = isThinking ? "Qwen3 (Thinking)" : "Qwen3 (Normal)";
+    
     res.json({
       template: "{{ .System }}{{ .Prompt }}",
       capabilities: ["vision", "tools"],
-      details: { family: "qwen" },
+      details: {
+        family: "qwen",
+        thinking_enabled: isThinking,
+        name: modelName,
+        description: isThinking 
+          ? "Qwen3 model with visible thinking process and reasoning"
+          : "Standard Qwen3 model for normal responses"
+      },
       model_info: {
-        "general.basename": "qwen3",
+        "general.basename": modelName,
         "general.architecture": "qwen",
+        "general.name": modelName,
         "qwen.context_length": 32768,
+        "qwen.thinking_enabled": isThinking,
       },
     });
   });
@@ -407,19 +509,34 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
     const next_child_fid = uuidv4(); // Pre-generate next message's fid
     const timestamp = Math.floor(Date.now() / 1000);
 
+    // Detect which model is being used
+    let thinking_enabled = false;
+    let requestedModel = req.body?.model || "qwen3-normal";
+    let modelName = "qwen3-235b-a22b"; // Use the actual Qwen API model name
+
+    if (requestedModel.includes("thinking")) {
+      thinking_enabled = true;
+      // console.log(`🧠 Using THINKING mode for model: ${requestedModel}`);
+    } else {
+      // console.log(`💬 Using NORMAL mode for model: ${requestedModel}`);
+    }
+
     // Build message object matching real website pattern
     const userMsgObj = {
       fid: user_fid,
       parentId: state.parent_id,
-      childrenIds: [next_child_fid], // Pre-generated fid for next message (like real website)
+      childrenIds: [next_child_fid],
       role: "user",
       content: userMessage,
       user_action: "chat",
       files: [],
       timestamp: timestamp,
-      models: ["qwen3-235b-a22b"],
+      models: [modelName],
       chat_type: "t2t",
-      feature_config: { thinking_enabled: false, output_schema: "phase" },
+      feature_config: {
+        thinking_enabled: thinking_enabled,
+        output_schema: "phase",
+      },
       extra: { meta: { subChatType: "t2t" } },
       sub_chat_type: "t2t",
       parent_id: state.parent_id,
@@ -462,20 +579,23 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
       incremental_output: true,
       chat_id: chat_id,
       chat_mode: "normal",
-      model: "qwen3-235b-a22b",
+      model: modelName,
       parent_id: state.parent_id,
       messages: [userMsgObj], // <-- only current message like Python
       timestamp: timestamp,
     };
     // Only log essential info
-    console.log(`🔗 Proxying chat to Qwen API as chat_id: ${chat_id}`);
+    // console.log(`🔗 Proxying chat to Qwen API as chat_id: ${chat_id}`);
     try {
-      const qwenRes = await fetch(QWEN_API.replace(/chat_id=([a-z0-9-]+)/i, `chat_id=${chat_id}`), {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        referrer: `https://chat.qwen.ai/c/${QWEN_CHAT_ID}`,
-      });
+      const qwenRes = await fetch(
+        QWEN_API.replace(/chat_id=([a-z0-9-]+)/i, `chat_id=${chat_id}`),
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          referrer: `https://chat.qwen.ai/c/${QWEN_CHAT_ID}`,
+        }
+      );
 
       if (!qwenRes.ok) {
         const body = await qwenRes.text();
@@ -487,30 +607,130 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      // Stream response with proper thinking/answer separation
       let buffer = "";
+      let isInThinkingPhase = false;
+      let thinkingContent = "";
 
       qwenRes.body.on("data", (chunk) => {
         const chunkStr = chunk.toString();
         buffer += chunkStr;
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
+
         for (const line of lines) {
           if (line.trim() === "" || !line.trim().startsWith("data:")) continue;
           const jsonStr = line.trim().slice(5).trim();
+
           try {
             const json = JSON.parse(jsonStr);
+
             if (
               json &&
-              json["response.created"] &&
-              json["response.created"].response_id
+              json.choices &&
+              Array.isArray(json.choices) &&
+              json.choices[0].delta
             ) {
-              const nextParentId = json["response.created"].response_id;
-              state.parent_id = nextParentId;
-              conversationState.set(conversation_key, state);
-              // No log here for parent_id update
+              const delta = json.choices[0].delta;
+
+              // Handle thinking phase
+              if (delta.phase === "think") {
+                if (!isInThinkingPhase) {
+                  isInThinkingPhase = true;
+                  // Send thinking header
+                  const thinkingHeader = {
+                    id: uuidv4(),
+                    object: "chat.completion.chunk",
+                    created: Math.floor(Date.now() / 1000),
+                    model: req.body?.model || "qwen3-normal",
+                    choices: [
+                      {
+                        index: 0,
+                        delta: {
+                          role: "assistant",
+                          content: "\n<thinking>\n",
+                        },
+                        finish_reason: null,
+                      },
+                    ],
+                  };
+                  res.write(`data: ${JSON.stringify(thinkingHeader)}\n\n`);
+                }
+
+                // Accumulate thinking content and send it
+                if (delta.content) {
+                  thinkingContent += delta.content;
+                  const thinkingChunk = {
+                    id: uuidv4(),
+                    object: "chat.completion.chunk",
+                    created: Math.floor(Date.now() / 1000),
+                    model: req.body?.model || "qwen3",
+                    choices: [
+                      {
+                        index: 0,
+                        delta: {
+                          content: delta.content,
+                        },
+                        finish_reason: null,
+                      },
+                    ],
+                  };
+                  res.write(`data: ${JSON.stringify(thinkingChunk)}\n\n`);
+                }
+
+                // Check if thinking phase is finished
+                if (delta.status === "finished") {
+                  const thinkingFooter = {
+                    id: uuidv4(),
+                    object: "chat.completion.chunk",
+                    created: Math.floor(Date.now() / 1000),
+                    model: req.body?.model || "qwen3",
+                    choices: [
+                      {
+                        index: 0,
+                        delta: {
+                          content: "\n</thinking>\n\n",
+                        },
+                        finish_reason: null,
+                      },
+                    ],
+                  };
+                  res.write(`data: ${JSON.stringify(thinkingFooter)}\n\n`);
+                  isInThinkingPhase = false;
+                }
+              }
+              // Handle answer phase
+              else if (delta.phase === "answer" || !delta.phase) {
+                // Convert to OpenAI format
+                const openaiChunk = {
+                  id: uuidv4(),
+                  object: "chat.completion.chunk",
+                  created: Math.floor(Date.now() / 1000),
+                  model: req.body?.model || "qwen3",
+                  choices: [
+                    {
+                      index: 0,
+                      delta: {
+                        role: delta.role || "assistant",
+                        content: delta.content || "",
+                      },
+                      finish_reason:
+                        delta.status === "finished" ? "stop" : null,
+                    },
+                  ],
+                };
+                res.write(`data: ${JSON.stringify(openaiChunk)}\n\n`);
+              }
+            } else {
+              // Handle non-delta messages (like [DONE])
+              if (jsonStr === "[DONE]") {
+                res.write(`data: [DONE]\n\n`);
+              }
             }
+          } catch (e) {
+            // If not JSON, just forward as-is
             res.write(line + "\n");
-          } catch (e) {}
+          }
         }
       });
 
@@ -544,18 +764,17 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
     console.log(`🚀 Server running at http://${HOST}:${PORT}`);
     console.log(
       "\n====================\n" +
-      "Copilot Chat Integration Steps:\n" +
-      "1. Open Copilot Chat.\n" +
-      "2. Go to the models section.\n" +
-      "3. Click 'Manage Model'.\n" +
-      "4. Click 'Ollama'.\n" +
-      "5. Select 'Qwen' from the list.\n" +
-      "6. Start chatting!\n" +
-      "====================\n"
+        "Copilot Chat Integration Steps:\n" +
+        "1. Open Copilot Chat.\n" +
+        "2. Go to the models section.\n" +
+        "3. Click 'Manage Model'.\n" +
+        "4. Click 'Ollama'.\n" +
+        "5. Select either:\n" +
+        "   - 'Qwen3' for normal responses\n" +
+        "   - 'Qwen3 (Thinking)' for thinking responses\n" +
+        "6. Start chatting!\n" +
+        "====================\n"
     );
-    console.log(
-      "✅ You are free to use Copilot Chat as described above."
-    );
+    console.log("✅ You are free to use Copilot Chat as described above.");
   });
 })();
-
