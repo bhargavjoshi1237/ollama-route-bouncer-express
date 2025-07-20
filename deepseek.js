@@ -6,11 +6,12 @@ import path from "path";
 import express from "express";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
+ 
 
 // Add stealth plugin
 puppeteer.use(StealthPlugin());
 
-const PROFILE_PATH = path.join(process.cwd(), "deepseek-profiles.txt");
+const PROFILE_PATH = path.join(process.cwd(), "deepseek-profile.txt"); // single profile
 
 // Express app setup
 const app = express();
@@ -119,27 +120,19 @@ function parseHeadersFile(path) {
   return headers;
 }
 
-// Save profile to file
+// Save profile to file (single profile)
 function saveProfile(profile) {
-  fs.appendFileSync(PROFILE_PATH, JSON.stringify(profile) + "\n");
+  fs.writeFileSync(PROFILE_PATH, JSON.stringify(profile) + "\n", "utf8");
 }
 
-// Load profiles from file
-function loadProfiles() {
-  if (!fs.existsSync(PROFILE_PATH)) return [];
-  const lines = fs
-    .readFileSync(PROFILE_PATH, "utf-8")
-    .split("\n")
-    .filter(Boolean);
-  return lines
-    .map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
+// Load profile from file (single profile)
+function loadProfile() {
+  if (!fs.existsSync(PROFILE_PATH)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(PROFILE_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
 }
 
 // Prompt user for input
@@ -171,6 +164,7 @@ async function initializeBrowser() {
       fs.writeFileSync(filename, "", "utf8");
     }
   });
+
   // Check if we have info in the txt files
   let cookiesRaw = readFileOrEmpty("cookies.txt").trim();
   let localStorageRaw = readFileOrEmpty("localstorage.txt").trim();
@@ -272,30 +266,19 @@ async function initializeBrowser() {
       "utf8"
     );
     await browser.close();
-    console.log("Session exported. Now let's create your DeepSeek profile.");
+    console.log("Session exported. Default DeepSeek profile will be used.");
   }
 
-  // Profile selection/creation (like proxy.js)
-  let profiles = loadProfiles();
-  let profile = null;
-  if (profiles.length === 0) {
-    const name = await promptUser("Enter a name for this TestingGG profile: ");
+  // Always use a single default profile
+  let profile = loadProfile();
+  if (!profile) {
     profile = {
-      name: name.trim() || "Unnamed Profile",
+      name: "Default Profile",
       chat_id: "",
     };
     saveProfile(profile);
-    console.log(`✅ Profile '${profile.name}' saved.`);
-  } else {
-    console.log("Available profiles:");
-    profiles.forEach((p, i) => {
-      console.log(`[${i + 1}] ${p.name || "Unnamed Profile"}`);
-    });
-    const idx = await promptUser("Select a profile number to continue: ");
-    profile = profiles[parseInt(idx, 10) - 1] || profiles[0];
-    console.log(`Using profile: ${profile.name}`);
+    console.log(`✅ Default profile created.`);
   }
-
   currentProfile = profile;
 
   // Read cookies/local/session again (in case just exported)
@@ -350,7 +333,18 @@ async function initializeBrowser() {
     });
   }
 
-  console.log("✅ Browser initialized and ready for TestingGG API requests");
+  console.log("✅ Browser initialized and ready for DeepSeek API requests");
+}
+
+// Helper to update chat_id in the single profile file
+function updateProfileChatId(chatId) {
+  let profile = loadProfile();
+  if (profile && profile.chat_id !== chatId) {
+    profile.chat_id = chatId;
+    saveProfile(profile);
+    currentProfile = profile;
+    console.log(`💾 Saved chat_id "${chatId}" to default profile`);
+  }
 }
 
 // Send prompt to DeepSeek and return streaming response
@@ -430,18 +424,28 @@ async function sendPromptToDeepSeek(prompt) {
       await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
       await globalPage.focus("#chat-input");
 
- await globalPage.evaluate((msg) => {
+      await globalPage.evaluate((msg) => {
         const el = document.querySelector("#chat-input");
         if (el) {
           el.value = msg;
           el.dispatchEvent(new Event("input", { bubbles: true }));
         }
-      }, userMessage);
+      }, prompt);
       await globalPage.type("#chat-input", " first part of the prompt");
-     await globalPage.keyboard.press("Backspace");
+      await globalPage.keyboard.press("Backspace");
 
       await globalPage.keyboard.press("Enter");
       await globalPage.keyboard.press("Enter");
+
+      // After sending, check if chat_id is present in URL and save it
+      const url = globalPage.url();
+      const chatIdMatch = url.match(/\/a\/chat\/s\/([^/?#]+)/);
+      if (chatIdMatch && chatIdMatch[1]) {
+        const newChatId = chatIdMatch[1];
+        if (!currentProfile.chat_id) {
+          updateProfileChatId(newChatId);
+        }
+      }
 
       console.log(`✅ Prompt sent: "${prompt.substring(0, 50)}..."`);
     } catch (e) {
@@ -650,24 +654,27 @@ app.post("/v1/chat/completions", async (req, res) => {
 
       // Send prompt to textarea - improved approach
       try {
-      await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
-      await globalPage.focus("#chat-input");
+        await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
+        await globalPage.focus("#chat-input");
 
-      // Set the textarea value directly, then type a space to trigger input event
-      await globalPage.evaluate((msg) => {
-        const el = document.querySelector("#chat-input");
-        if (el) {
-          // Set value via property, not attribute
-          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set.call(el, msg);
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-      }, userMessage);
+        // Set the textarea value directly, then type a space to trigger input event
+        await globalPage.evaluate((msg) => {
+          const el = document.querySelector("#chat-input");
+          if (el) {
+            // Set value via property, not attribute
+            Object.getOwnPropertyDescriptor(
+              window.HTMLTextAreaElement.prototype,
+              "value"
+            ).set.call(el, msg);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }, userMessage);
 
-      // Type a space and then backspace to ensure React registers the change
-      await globalPage.type("#chat-input", "second part of the prompt");
-      await globalPage.keyboard.press("Backspace");
+        // Type a space and then backspace to ensure React registers the change
+        await globalPage.type("#chat-input", "second part of the prompt");
+        await globalPage.keyboard.press("Backspace");
 
-      await globalPage.keyboard.press("Enter");
+        await globalPage.keyboard.press("Enter");
         // Wait until the textarea value matches the prompt, polling up to 5 seconds
         // const maxWaitMs = 5000;
         // const pollInterval = 50;
@@ -698,7 +705,7 @@ app.post("/v1/chat/completions", async (req, res) => {
     } else {
       // Non-streaming response
       const response = await sendPromptToDeepSeek(userMessage);
-      
+
       res.json({
         id: uuidv4(),
         object: "chat.completion",
@@ -769,3 +776,4 @@ app.post("/v1/chat/completions", async (req, res) => {
     process.exit(1);
   }
 })();
+   
