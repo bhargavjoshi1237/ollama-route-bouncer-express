@@ -279,7 +279,7 @@ async function initializeBrowser() {
   let profiles = loadProfiles();
   let profile = null;
   if (profiles.length === 0) {
-    const name = await promptUser("Enter a name for this DeepSeek profile: ");
+    const name = await promptUser("Enter a name for this TestingGG profile: ");
     profile = {
       name: name.trim() || "Unnamed Profile",
       chat_id: "",
@@ -350,7 +350,7 @@ async function initializeBrowser() {
     });
   }
 
-  console.log("✅ Browser initialized and ready for API requests");
+  console.log("✅ Browser initialized and ready for TestingGG API requests");
 }
 
 // Send prompt to DeepSeek and return streaming response
@@ -427,30 +427,21 @@ async function sendPromptToDeepSeek(prompt) {
       await globalPage.focus("#chat-input");
 
       // Clear the textarea using input event
-      await globalPage.evaluate(() => {
+      await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
+      await globalPage.focus("#chat-input");
+
+ await globalPage.evaluate((msg) => {
         const el = document.querySelector("#chat-input");
-        el.value = "";
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-      });
+        if (el) {
+          el.value = msg;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }, userMessage);
+      await globalPage.type("#chat-input", " first part of the prompt");
+     await globalPage.keyboard.press("Backspace");
 
-      // Type the message character by character
-      await globalPage.type("#chat-input", prompt); // or userMessage
-
-      // Wait until the textarea value matches the prompt
-      await globalPage.waitForFunction(
-        (expected) => {
-          const el = document.querySelector("#chat-input");
-          return el && el.value === expected;
-        },
-        {},
-        prompt // or userMessage
-      );
-
-      // Add a short delay to ensure site registers the input
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      // Now press Enter
-      // await globalPage.keyboard.press("Enter");
+      await globalPage.keyboard.press("Enter");
+      await globalPage.keyboard.press("Enter");
 
       console.log(`✅ Prompt sent: "${prompt.substring(0, 50)}..."`);
     } catch (e) {
@@ -659,26 +650,24 @@ app.post("/v1/chat/completions", async (req, res) => {
 
       // Send prompt to textarea - improved approach
       try {
-        await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
-        await globalPage.focus("#chat-input");
+      await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
+      await globalPage.focus("#chat-input");
 
-        // // Clear the textarea first
-        // await globalPage.evaluate(() => {
-        //   const el = document.querySelector("#chat-input");
-        //   el.value = "";
-        //   el.dispatchEvent(new Event("input", { bubbles: true }));
-        // });
+      // Set the textarea value directly, then type a space to trigger input event
+      await globalPage.evaluate((msg) => {
+        const el = document.querySelector("#chat-input");
+        if (el) {
+          // Set value via property, not attribute
+          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set.call(el, msg);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }, userMessage);
 
-        await globalPage.evaluate((msg) => {
-          const el = document.querySelector("#chat-input");
-          if (el) {
-            el.value = msg;
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-          }
-        }, userMessage);
+      // Type a space and then backspace to ensure React registers the change
+      await globalPage.type("#chat-input", "second part of the prompt");
+      await globalPage.keyboard.press("Backspace");
 
-        await globalPage.type("#chat-input", "ok");
-        await globalPage.keyboard.press("Enter");
+      await globalPage.keyboard.press("Enter");
         // Wait until the textarea value matches the prompt, polling up to 5 seconds
         // const maxWaitMs = 5000;
         // const pollInterval = 50;
@@ -709,7 +698,7 @@ app.post("/v1/chat/completions", async (req, res) => {
     } else {
       // Non-streaming response
       const response = await sendPromptToDeepSeek(userMessage);
-
+      
       res.json({
         id: uuidv4(),
         object: "chat.completion",
