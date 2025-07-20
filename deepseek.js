@@ -653,14 +653,13 @@ app.post("/v1/chat/completions", async (req, res) => {
         await globalPage.waitForSelector("#chat-input", { timeout: 10000 });
         await globalPage.focus("#chat-input");
 
-        // Clear the textarea first
-        await globalPage.evaluate(() => {
-          const el = document.querySelector("#chat-input");
-          el.value = "";
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-
-        // Type the message character by character to trigger all events
+        // // Clear the textarea first
+        // await globalPage.evaluate(() => {
+        //   const el = document.querySelector("#chat-input");
+        //   el.value = "";
+        //   el.dispatchEvent(new Event("input", { bubbles: true }));
+        // });
+ 
         await globalPage.evaluate((msg) => {
           const el = document.querySelector("#chat-input");
           if (el) {
@@ -669,7 +668,7 @@ app.post("/v1/chat/completions", async (req, res) => {
           }
         }, userMessage);
 
-        await globalPage.type("#chat-input", " ok");
+        await globalPage.type("#chat-input", "ok");
         await globalPage.keyboard.press("Enter");
         // Wait until the textarea value matches the prompt, polling up to 5 seconds
         // const maxWaitMs = 5000;
