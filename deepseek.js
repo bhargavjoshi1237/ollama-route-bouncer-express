@@ -563,11 +563,11 @@ app.post("/v1/chat/completions", async (req, res) => {
         }
       };
 
-      // Real-time streaming handler using dataReceived events
-      const dataReceivedHandler = async (params) => {
-        const { requestId, dataLength, encodedDataLength } = params;
+      const loadingFinishedHandler = async (params) => {
+        const { requestId } = params;
         if (eventStreamRequests.has(requestId)) {
           try {
+            // Wait for complete response body
             const { body, base64Encoded } = await globalClient.send(
               "Network.getResponseBody",
               { requestId }
@@ -576,48 +576,59 @@ app.post("/v1/chat/completions", async (req, res) => {
               ? Buffer.from(body, "base64").toString("utf8")
               : body;
 
-            // Process each line as it comes
-            text.split("\n").forEach((line) => {
+            // Parse complete event stream and extract all tokens
+            const lines = text.split("\n");
+            const tokens = [];
+
+            for (const line of lines) {
               if (line.trim().startsWith("data:")) {
                 try {
-                  const json = JSON.parse(line.trim().slice(5).trim());
-                  if (typeof json.v === "string" && json.v) {
-                    // Convert to OpenAI streaming format and send immediately
-                    const openaiChunk = {
-                      id: uuidv4(),
-                      object: "chat.completion.chunk",
-                      created: Math.floor(Date.now() / 1000),
-                      model: req.body?.model || "deepseek-r1",
-                      choices: [
-                        {
-                          index: 0,
-                          delta: {
-                            role: responseStarted ? undefined : "assistant",
-                            content: json.v,
-                          },
-                          finish_reason: null,
-                        },
-                      ],
-                    };
-                    responseStarted = true;
-                    res.write(`data: ${JSON.stringify(openaiChunk)}\n\n`);
-                  }
-                } catch {}
-              }
-            });
-          } catch (err) {
-            // Ignore errors during streaming, continue processing
-          }
-        }
-      };
+                  const dataStr = line.trim().slice(5).trim();
+                  if (dataStr === "[DONE]") break;
 
-      const loadingFinishedHandler = async (params) => {
-        const { requestId } = params;
-        if (eventStreamRequests.has(requestId)) {
-          try {
+                  const json = JSON.parse(dataStr);
+                  if (
+                    json.v &&
+                    typeof json.v === "string" &&
+                    json.v.length > 0
+                  ) {
+                    tokens.push(json.v);
+                  }
+                } catch (parseError) {
+                  continue;
+                }
+              }
+            }
+
+            // Send tokens in OpenAI streaming format
+            const completionId = uuidv4();
+            for (let i = 0; i < tokens.length; i++) {
+              const openaiChunk = {
+                id: completionId,
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: req.body?.model || "deepseek-r1",
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: responseStarted ? undefined : "assistant",
+                      content: tokens[i],
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              };
+              responseStarted = true;
+              res.write(`data: ${JSON.stringify(openaiChunk)}\n\n`);
+
+              // Small delay to simulate streaming
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+
             // Send final completion chunk
             const finalChunk = {
-              id: uuidv4(),
+              id: completionId,
               object: "chat.completion.chunk",
               created: Math.floor(Date.now() / 1000),
               model: req.body?.model || "deepseek-r1",
@@ -634,7 +645,6 @@ app.post("/v1/chat/completions", async (req, res) => {
             res.end();
 
             globalClient.off("Network.responseReceived", responseHandler);
-            globalClient.off("Network.dataReceived", dataReceivedHandler);
             globalClient.off("Network.loadingFinished", loadingFinishedHandler);
           } catch (err) {
             console.error("Stream completion error:", err);
@@ -645,7 +655,6 @@ app.post("/v1/chat/completions", async (req, res) => {
       };
 
       globalClient.on("Network.responseReceived", responseHandler);
-      globalClient.on("Network.dataReceived", dataReceivedHandler);
       globalClient.on("Network.loadingFinished", loadingFinishedHandler);
 
       // Send prompt to textarea - improved approach
@@ -659,7 +668,7 @@ app.post("/v1/chat/completions", async (req, res) => {
         //   el.value = "";
         //   el.dispatchEvent(new Event("input", { bubbles: true }));
         // });
- 
+
         await globalPage.evaluate((msg) => {
           const el = document.querySelector("#chat-input");
           if (el) {
@@ -688,12 +697,10 @@ app.post("/v1/chat/completions", async (req, res) => {
         // }
 
         // Press Enter to send
-       
 
         console.log(`✅ Prompt sent: "${userMessage.substring(0, 50)}..."`);
       } catch (e) {
         globalClient.off("Network.responseReceived", responseHandler);
-        globalClient.off("Network.dataReceived", dataReceivedHandler);
         globalClient.off("Network.loadingFinished", loadingFinishedHandler);
         res
           .status(500)
