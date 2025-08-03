@@ -13,21 +13,21 @@ const SUPPORTED_MODELS = [
   {
     name: "kimi-k2",
     model: "moonshotai/kimi-k2-instruct",
-    display_name: "Kimi K2 Instruct",
+    display_name: "Kimi K2 Instruct (NVIDIA LLM)",
     tags: ["kimi", "standard"],
     description: "Kimi K2 Instruct Model",
   },
   {
     name: "deepseek-r1",
     model: "deepseek-ai/deepseek-r1-0528",
-    display_name: "DeepSeek R1-0528",
+    display_name: "DeepSeek R1-0528  (NVIDIA LLM)",
     tags: ["deepseek", "reasoning"],
     description: "DeepSeek R1-0528 with reasoning tokens",
   },
   {
     name: "qwen3-235b-a22b",
     model: "qwen/qwen3-235b-a22b",
-    display_name: "Qwen3-235B-A22B",
+    display_name: "Qwen3-235B-A22B  (NVIDIA LLM)",
     tags: ["qwen", "reasoning"],
     description: "Qwen3-235B-A22B with reasoning tokens",
   }
@@ -234,4 +234,3 @@ async function startServer() {
 }
 
 startServer();
-
