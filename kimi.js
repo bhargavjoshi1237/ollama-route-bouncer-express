@@ -289,7 +289,7 @@ app.get("/api/tags", (req, res) => {
           {
             name: "k2",
             model: "k2",
-            display_name: "K2 Flagship",
+            display_name: "K2 (WEB)",
             tags: ["flagship", "standard"],
             modified_at: new Date().toISOString(),
             size: 100000000000,
@@ -307,7 +307,7 @@ app.get("/api/tags", (req, res) => {
           {
             name: "k1.5",
             model: "k1.5",
-            display_name: "Kimi 1.5 Vision",
+            display_name: "Kimi 1.5 (WEB)",
             tags: ["vision", "efficient"],
             modified_at: new Date().toISOString(),
             size: 100000000000,
@@ -660,6 +660,21 @@ app.post("/v1/chat/completions", async (req, res) => {
   }
 });
 
+// Helper to parse headers.txt (tab-separated key/value)
+function parseHeadersFile(path) {
+  if (!fs.existsSync(path)) return {};
+  const raw = fs.readFileSync(path, 'utf8');
+  const headers = {};
+  raw.split('\n').forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    const [key, ...rest] = line.split('\t');
+    if (!key || rest.length === 0) return;
+    headers[key] = rest.join('\t');
+  });
+  return headers;
+}
+
 // Main entry
 (async () => {
   activeProfile = await selectProfile();
@@ -668,6 +683,14 @@ app.post("/v1/chat/completions", async (req, res) => {
     process.exit(1);
   }
   console.log(`Using profile: ${activeProfile.name}`);
+
+  // Read headers.txt and merge into activeProfile.headers
+  const headersTxtPath = path.join(__dirname, "headers.txt");
+  const headersFromFile = parseHeadersFile(headersTxtPath);
+  if (Object.keys(headersFromFile).length > 0) {
+    activeProfile.headers = { ...activeProfile.headers, ...headersFromFile };
+    console.log("Loaded headers from headers.txt");
+  }
 
   // Ask user for next action: list chats, create new chat, or continue
   const rl = readline.createInterface({
