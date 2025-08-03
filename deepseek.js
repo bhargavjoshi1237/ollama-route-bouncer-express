@@ -6,7 +6,6 @@ import path from "path";
 import express from "express";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
- 
 
 // Add stealth plugin
 puppeteer.use(StealthPlugin());
@@ -185,7 +184,7 @@ async function initializeBrowser() {
     );
     console.log("Launching browser for you to login to DeepSeek...");
     const browser = await puppeteer.launch({
-      headless: false,
+      headless: false, // changed from false to true
       args: ["--no-sandbox"],
     });
     const page = await browser.newPage();
@@ -287,7 +286,7 @@ async function initializeBrowser() {
   let sessionStorageData = parseStorageFile("sessionstorage.txt");
 
   globalBrowser = await puppeteer.launch({
-    headless: false,
+    headless: false, // changed from false to true
     args: ["--no-sandbox"],
   });
   globalPage = await globalBrowser.newPage();
@@ -333,7 +332,7 @@ async function initializeBrowser() {
     });
   }
 
-  console.log("✅ Browser initialized and ready for DeepSeek API requests");
+  console.log("✅ Initialized and ready for DeepSeek API requests");
 }
 
 // Helper to update chat_id in the single profile file
@@ -474,7 +473,7 @@ app.get("/api/tags", (req, res) => {
       {
         name: "deepseek-r1",
         model: "deepseek-r1",
-        display_name: "DeepSeek R1",
+        display_name: "DeepSeek R1 (WEB)",
         tags: ["reasoning", "thinking"],
         modified_at: new Date().toISOString(),
         size: 671000000000,
@@ -489,30 +488,69 @@ app.get("/api/tags", (req, res) => {
           description: "DeepSeek R1 model with advanced reasoning capabilities",
         },
       },
+      {
+        name: "deepseek-r1-thinking",
+        model: "deepseek-r1-thinking",
+        display_name: "DeepSeek R1 (Thinking) (WEB)",
+        tags: ["reasoning", "thinking", "advanced"],
+        modified_at: new Date().toISOString(),
+        size: 671000000000,
+        digest: "sha256:mock-digest-deepseek-thinking",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "deepseek",
+          families: ["deepseek"],
+          parameter_size: "671B",
+          quantization_level: "Q4_0",
+          description:
+            "DeepSeek R1 model with advanced reasoning and thinking enabled",
+        },
+      },
     ],
   });
 });
 
 app.post("/api/show", (req, res) => {
   const modelId = req.body?.model || "deepseek-r1";
-
-  res.json({
-    template: "{{ .System }}{{ .Prompt }}",
-    capabilities: ["reasoning", "thinking"],
-    details: {
-      family: "deepseek",
-      thinking_enabled: true,
-      name: "DeepSeek R1",
-      description: "DeepSeek R1 model with advanced reasoning capabilities",
-    },
-    model_info: {
-      "general.basename": "DeepSeek R1",
-      "general.architecture": "deepseek",
-      "general.name": "DeepSeek R1",
-      "deepseek.context_length": 32768,
-      "deepseek.thinking_enabled": true,
-    },
-  });
+  if (modelId === "deepseek-r1-thinking") {
+    res.json({
+      template: "{{ .System }}{{ .Prompt }}",
+      capabilities: ["reasoning", "thinking"],
+      details: {
+        family: "deepseek",
+        thinking_enabled: true,
+        name: "DeepSeek R1 (Thinking)",
+        description:
+          "DeepSeek R1 model with advanced reasoning and thinking enabled",
+      },
+      model_info: {
+        "general.basename": "DeepSeek R1 (Thinking)",
+        "general.architecture": "deepseek",
+        "general.name": "DeepSeek R1 (Thinking)",
+        "deepseek.context_length": 32768,
+        "deepseek.thinking_enabled": true,
+      },
+    });
+  } else {
+    res.json({
+      template: "{{ .System }}{{ .Prompt }}",
+      capabilities: ["reasoning", "thinking"],
+      details: {
+        family: "deepseek",
+        thinking_enabled: false,
+        name: "DeepSeek R1",
+        description: "DeepSeek R1 model with advanced reasoning capabilities",
+      },
+      model_info: {
+        "general.basename": "DeepSeek V3",
+        "general.architecture": "deepseek",
+        "general.name": "DeepSeek R1",
+        "deepseek.context_length": 32768,
+        "deepseek.thinking_enabled": false,
+      },
+    });
+  }
 });
 
 app.post("/v1/chat/completions", async (req, res) => {
@@ -528,9 +566,99 @@ app.post("/v1/chat/completions", async (req, res) => {
       }
     }
 
-    console.log(
-      `🔗 Proxying prompt to DeepSeek: "${userMessage.substring(0, 50)}..."`
-    );
+    const model = req.body?.model || "deepseek-r1";
+    const isThinkingModel = model === "deepseek-r1-thinking";
+
+    // If thinking model, ensure "Thinking" is enabled in UI
+    if (isThinkingModel && globalPage) {
+      try {
+        // console.debug("[DEBUG] Attempting to enable 'Thinking' mode in DeepSeek UI...");
+        // Use evaluate to find and click the button, avoiding $x
+        const enabled = await globalPage.evaluate(() => {
+          const nodes = Array.from(
+            document.querySelectorAll('div[role="button"]')
+          );
+          const target = nodes.find((el) =>
+            Array.from(el.querySelectorAll("span,div")).some(
+              (n) => n.textContent && n.textContent.trim() === "DeepThink (R1)"
+            )
+          );
+          if (target) {
+            const style = target.getAttribute("style") || "";
+            // Enabled if style contains rgba(77, 107, 254, 0.40)
+            const isActive = style.includes(
+              "--ds-button-color: rgba(77, 107, 254, 0.40)"
+            );
+            if (!isActive) {
+              target.click();
+              return true; // Clicked to enable
+            }
+            return false; // Already enabled
+          }
+          return null; // Not found
+        });
+        if (enabled === null) {
+          console.warn(
+            "⚠️ Could not find 'DeepThink (R1)' button to enable Thinking mode."
+          );
+        } else if (enabled) {
+          // console.log("🔄 Enabled 'Thinking' mode in DeepSeek UI");
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      } catch (e) {
+        console.error("Error enabling 'Thinking' mode:", e);
+      }
+      console.log("Thinking Prompt");
+    } else if (!isThinkingModel && globalPage) {
+      // If not thinking model, ensure "Thinking" is disabled
+      try {
+        // console.debug("[DEBUG] Attempting to disable 'Thinking' mode in DeepSeek UI...");
+        const disabled = await globalPage.evaluate(() => {
+          const nodes = Array.from(
+            document.querySelectorAll('div[role="button"]')
+          );
+          const target = nodes.find((el) =>
+            Array.from(el.querySelectorAll("span,div")).some(
+              (n) => n.textContent && n.textContent.trim() === "DeepThink (R1)"
+            )
+          );
+          if (target) {
+            const style = target.getAttribute("style") || "";
+            // Enabled if style contains rgba(77, 107, 254, 0.40)
+            const isActive = style.includes(
+              "--ds-button-color: rgba(77, 107, 254, 0.40)"
+            );
+            if (isActive) {
+              target.click();
+              return true; // Clicked to disable
+            }
+            return false; // Already disabled
+          }
+          return null; // Not found
+        });
+        if (disabled === null) {
+          console.warn(
+            "⚠️ Could not find 'DeepThink (R1)' button to disable Thinking mode."
+          );
+        } else if (disabled) {
+          // console.log("🔄 Disabled 'Thinking' mode in DeepSeek UI");
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      } catch (e) {
+        console.error("Error disabling 'Thinking' mode:", e);
+      }
+      console.log("Non Thinking Prompt");
+    } else {
+      if (!globalPage) {
+        console.warn("[WARN] globalPage is not initialized.");
+      }
+    }
+
+    // ✅ Prompt sent
+    console.log("✅ Prompt sent");
+    // console.log(
+    //   `🔗 Proxying prompt to DeepSeek: "${userMessage.substring(0, 50)}..."`
+    // );
 
     // Check if streaming is requested
     const isStreaming = req.body?.stream === true;
@@ -562,7 +690,6 @@ app.post("/v1/chat/completions", async (req, res) => {
         const { requestId } = params;
         if (eventStreamRequests.has(requestId)) {
           try {
-            // Wait for complete response body
             const { body, base64Encoded } = await globalClient.send(
               "Network.getResponseBody",
               { requestId }
@@ -571,34 +698,83 @@ app.post("/v1/chat/completions", async (req, res) => {
               ? Buffer.from(body, "base64").toString("utf8")
               : body;
 
-            // Parse complete event stream and extract all tokens
-            const lines = text.split("\n");
-            const tokens = [];
+            // --- Thinking/Answer token separation ---
+            let thinkingTokens = [];
+            let answerTokens = [];
+            let inThinkingPhase = true;
 
-            for (const line of lines) {
-              if (line.trim().startsWith("data:")) {
-                try {
-                  const dataStr = line.trim().slice(5).trim();
-                  if (dataStr === "[DONE]") break;
+            if (isThinkingModel) {
+              // Parse all lines, separate thinking and answer tokens
+              const lines = text.split("\n");
+              for (const line of lines) {
+                if (line.trim().startsWith("data:")) {
+                  try {
+                    const dataStr = line.trim().slice(5).trim();
+                    if (dataStr === "[DONE]") break;
+                    const json = JSON.parse(dataStr);
 
-                  const json = JSON.parse(dataStr);
-                  if (
-                    json.v &&
-                    typeof json.v === "string" &&
-                    json.v.length > 0
-                  ) {
-                    tokens.push(json.v);
-                  }
-                } catch (parseError) {
-                  continue;
+                    // If we see the thinking elapsed event, switch to answer tokens
+                    if (json.p === "response/thinking_elapsed_secs") {
+                      inThinkingPhase = false;
+                      continue;
+                    }
+
+                    // While in thinking phase, collect ALL thinking tokens
+                    if (
+                      inThinkingPhase &&
+                      json.v &&
+                      typeof json.v === "string"
+                    ) {
+                      thinkingTokens.push(json.v);
+                      continue;
+                    }
+
+                    // After thinking elapsed, collect answer tokens
+                    if (
+                      !inThinkingPhase &&
+                      json.v &&
+                      typeof json.v === "string"
+                    ) {
+                      answerTokens.push(json.v);
+                    }
+                  } catch {}
+                }
+              }
+            } else {
+              // Not a thinking model, just collect all tokens as answer
+              const lines = text.split("\n");
+              for (const line of lines) {
+                if (line.trim().startsWith("data:")) {
+                  try {
+                    const dataStr = line.trim().slice(5).trim();
+                    if (dataStr === "[DONE]") break;
+                    const json = JSON.parse(dataStr);
+                    if (
+                      json.v &&
+                      typeof json.v === "string" &&
+                      json.v.length > 0
+                    ) {
+                      answerTokens.push(json.v);
+                    }
+                  } catch {}
                 }
               }
             }
 
-            // Send tokens in OpenAI streaming format
+            // Compose output for Copilot Chat
+            let output = "";
+            if (isThinkingModel && thinkingTokens.length > 0) {
+              output +=
+                "<thinking>\n" + thinkingTokens.join("") + "\n</thinking>\n\n";
+            }
+            if (answerTokens.length > 0) {
+              output += answerTokens.join("");
+            }
+
+            // Send tokens in OpenAI streaming format (simulate as one chunk for simplicity)
             const completionId = uuidv4();
-            for (let i = 0; i < tokens.length; i++) {
-              const openaiChunk = {
+            res.write(
+              `data: ${JSON.stringify({
                 id: completionId,
                 object: "chat.completion.chunk",
                 created: Math.floor(Date.now() / 1000),
@@ -607,35 +783,30 @@ app.post("/v1/chat/completions", async (req, res) => {
                   {
                     index: 0,
                     delta: {
-                      role: responseStarted ? undefined : "assistant",
-                      content: tokens[i],
+                      role: "assistant",
+                      content: output,
                     },
                     finish_reason: null,
                   },
                 ],
-              };
-              responseStarted = true;
-              res.write(`data: ${JSON.stringify(openaiChunk)}\n\n`);
-
-              // Small delay to simulate streaming
-              await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-
-            // Send final completion chunk
-            const finalChunk = {
-              id: completionId,
-              object: "chat.completion.chunk",
-              created: Math.floor(Date.now() / 1000),
-              model: req.body?.model || "deepseek-r1",
-              choices: [
-                {
-                  index: 0,
-                  delta: {},
-                  finish_reason: "stop",
-                },
-              ],
-            };
-            res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+              })}\n\n`
+            );
+            // Final chunk
+            res.write(
+              `data: ${JSON.stringify({
+                id: completionId,
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: req.body?.model || "deepseek-r1",
+                choices: [
+                  {
+                    index: 0,
+                    delta: {},
+                    finish_reason: "stop",
+                  },
+                ],
+              })}\n\n`
+            );
             res.write(`data: [DONE]\n\n`);
             res.end();
 
@@ -694,7 +865,7 @@ app.post("/v1/chat/completions", async (req, res) => {
 
         // Press Enter to send
 
-        console.log(`✅ Prompt sent: "${userMessage.substring(0, 50)}..."`);
+        console.log("✅ Prompt sent");
       } catch (e) {
         globalClient.off("Network.responseReceived", responseHandler);
         globalClient.off("Network.loadingFinished", loadingFinishedHandler);
@@ -739,7 +910,7 @@ app.post("/v1/chat/completions", async (req, res) => {
 
 // Initialize and start server
 (async () => {
-  console.log("🚀 Initializing DeepSeek Proxy...");
+  console.log("🚀 Initializing DeepSeek Router...");
 
   try {
     await initializeBrowser();
@@ -760,7 +931,7 @@ app.post("/v1/chat/completions", async (req, res) => {
           "6. Start chatting!\n" +
           "====================\n"
       );
-      console.log("✅ You are free to use Copilot Chat with DeepSeek R1.");
+      console.log("✅ You are free to use Copilot Chat with DeepSeek.");
     });
 
     // Graceful shutdown
@@ -776,4 +947,3 @@ app.post("/v1/chat/completions", async (req, res) => {
     process.exit(1);
   }
 })();
-   
