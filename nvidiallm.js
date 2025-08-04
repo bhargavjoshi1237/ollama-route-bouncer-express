@@ -30,6 +30,20 @@ const SUPPORTED_MODELS = [
     display_name: "Qwen3-235B-A22B  (NVIDIA LLM)",
     tags: ["qwen", "reasoning"],
     description: "Qwen3-235B-A22B with reasoning tokens",
+  },
+  {
+    name: "llama-3.3-nemotron-super-49b-v1.5",
+    model: "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+    display_name: "Llama-3.3 Nemotron Super 49B v1.5 (NVIDIA LLM)",
+    tags: ["llama", "nemotron"],
+    description: "NVIDIA Llama-3.3 Nemotron Super 49B v1.5 Model",
+  },
+  {
+    name: "qwq-32b",
+    model: "qwen/qwq-32b",
+    display_name: "Qwen QWQ-32B (NVIDIA LLM)",
+    tags: ["qwen", "qwq"],
+    description: "Qwen QWQ-32B Model",
   }
 ];
 
