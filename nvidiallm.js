@@ -216,23 +216,38 @@ app.post("/v1/chat/completions", async (req, res) => {
   }
 });
 
+// /api/version endpoint for Ollama compatibility
+app.get("/api/version", (req, res) => {
+  // Return a fixed version string compatible with Copilot's minimum requirement
+  res.json({ version: "0.6.4" });
+});
+
 // /api/show endpoint (POST) for Ollama's model info request
 app.post("/api/show", (req, res) => {
   const modelId = req.body?.model || SUPPORTED_MODELS[0].model;
   const foundModel = ollamaModels.find(m => m.model === modelId || m.name === modelId);
+
+  // Determine architecture and context length
+  const architecture = foundModel ? foundModel.tags[0] : "kimi";
+  const displayName = foundModel ? foundModel.display_name : modelId;
+  const contextLength = 200000;
+
   res.json({
     template: "{{ .System }}{{ .Prompt }}",
     capabilities: ["vision", "tools"],
     details: {
-      family: foundModel ? foundModel.tags[0] : "kimi",
-      name: foundModel ? foundModel.display_name : modelId,
+      family: architecture,
+      name: displayName,
       description: foundModel ? foundModel.details.description : "Kimi AI model proxy",
     },
     model_info: {
-      "general.basename": foundModel ? foundModel.display_name : modelId,
-      "general.architecture": foundModel ? foundModel.tags[0] : "kimi",
-      "general.name": foundModel ? foundModel.display_name : modelId,
-      "kimi.context_length": 200000,
+      "general.basename": displayName,
+      "general.architecture": architecture,
+      "general.name": displayName,
+      [`${architecture}.context_length`]: contextLength,
+      // Add limits for compatibility
+      "limits.max_prompt_tokens": contextLength - 4096,
+      "limits.max_output_tokens": 4096,
     },
   });
 });
