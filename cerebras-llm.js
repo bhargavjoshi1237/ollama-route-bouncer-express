@@ -38,6 +38,20 @@ const SUPPORTED_MODELS = [
     tags: ["qwen", "standard"],
     description: "Qwen 3 32B Model",
   },
+  {
+    name: "gpt-oss-120b",
+    model: "gpt-oss-120b",
+    display_name: "GPT-OSS 120B",
+    tags: ["gpt-oss", "open-source"],
+    description: "GPT-OSS 120B open-source model with high reasoning effort",
+    default_options: {
+      stream: true,
+      max_completion_tokens: 65536,
+      temperature: 1,
+      top_p: 1,
+      reasoning_effort: "high",
+    },
+  },
 ];
 
 // Load profiles from file
@@ -157,6 +171,11 @@ const ollamaModels = SUPPORTED_MODELS.map((m) => ({
     description: m.description,
   },
 }));
+
+// /api/version endpoint for Ollama compatibility
+app.get("/api/version", (req, res) => {
+  res.json({ version: "0.6.4" });
+});
 
 // /api/tags endpoint (GET)
 app.get("/api/tags", (req, res) => {
@@ -342,21 +361,26 @@ app.post("/api/show", (req, res) => {
   const foundModel = ollamaModels.find(
     (m) => m.model === modelId || m.name === modelId
   );
+  const architecture = foundModel ? foundModel.tags[0] : "qwen";
+  const displayName = foundModel ? foundModel.display_name : modelId;
+  const contextLength = 200000;
   res.json({
     template: "{{ .System }}{{ .Prompt }}",
     capabilities: ["vision", "tools"],
     details: {
-      family: foundModel ? foundModel.tags[0] : "qwen",
-      name: foundModel ? foundModel.display_name : modelId,
+      family: architecture,
+      name: displayName,
       description: foundModel
         ? foundModel.details.description
         : "Cerebras AI model proxy",
     },
     model_info: {
-      "general.basename": foundModel ? foundModel.display_name : modelId,
-      "general.architecture": foundModel ? foundModel.tags[0] : "qwen",
-      "general.name": foundModel ? foundModel.display_name : modelId,
-      "qwen.context_length": 200000,
+      "general.basename": displayName,
+      "general.architecture": architecture,
+      "general.name": displayName,
+      [`${architecture}.context_length`]: contextLength,
+      "limits.max_prompt_tokens": contextLength - 4096,
+      "limits.max_output_tokens": 4096,
     },
   });
 });
