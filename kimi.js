@@ -264,6 +264,11 @@ async function selectProfile() {
 }
 
 // Mock Ollama API endpoints
+app.get("/api/version", (req, res) => {
+  res.json({ version: "0.6.4" });
+});
+
+// /api/tags endpoint (GET)
 app.get("/api/tags", (req, res) => {
   const models =
     availableModels.length > 0
@@ -324,31 +329,119 @@ app.get("/api/tags", (req, res) => {
           },
         ];
 
+  // Add Ollama compatibility fields
+  const ollamaModels = models.map((m) => ({
+    ...m,
+    "general.architecture": "kimi",
+    "kimi.context_length": 200000,
+    "limits.max_prompt_tokens": 200000 - 4096,
+    "limits.max_output_tokens": 4096,
+  }));
+
   res.json({
-    models: models,
+    models: ollamaModels,
   });
 });
 
+// /api/tags endpoint (POST)
+app.post("/api/tags", (req, res) => {
+  // Same logic as GET
+  const models =
+    availableModels.length > 0
+      ? availableModels.map((model) => ({
+          name: model.model,
+          model: model.model,
+          display_name: model.name,
+          tags: ["kimi", "standard"],
+          modified_at: new Date().toISOString(),
+          size: 100000000000,
+          digest: `sha256:mock-digest-${model.model}`,
+          details: {
+            parent_model: "",
+            format: "gguf",
+            family: "kimi",
+            families: ["kimi"],
+            parameter_size: "Unknown",
+            quantization_level: "Q4_0",
+            description: model.description,
+          },
+        }))
+      : [
+          {
+            name: "k2",
+            model: "k2",
+            display_name: "K2 (WEB)",
+            tags: ["flagship", "standard"],
+            modified_at: new Date().toISOString(),
+            size: 100000000000,
+            digest: "sha256:mock-digest-k2",
+            details: {
+              parent_model: "",
+              format: "gguf",
+              family: "kimi",
+              families: ["kimi"],
+              parameter_size: "Unknown",
+              quantization_level: "Q4_0",
+              description: "Flagship model",
+            },
+          },
+          {
+            name: "k1.5",
+            model: "k1.5",
+            display_name: "Kimi 1.5 (WEB)",
+            tags: ["vision", "efficient"],
+            modified_at: new Date().toISOString(),
+            size: 100000000000,
+            digest: "sha256:mock-digest-k1.5",
+            details: {
+              parent_model: "",
+              format: "gguf",
+              family: "kimi",
+              families: ["kimi"],
+              parameter_size: "Unknown",
+              quantization_level: "Q4_0",
+              description: "Efficient model with vision",
+            },
+          },
+        ];
+
+  const ollamaModels = models.map((m) => ({
+    ...m,
+    "general.architecture": "kimi",
+    "kimi.context_length": 200000,
+    "limits.max_prompt_tokens": 200000 - 4096,
+    "limits.max_output_tokens": 4096,
+  }));
+
+  res.json({
+    models: ollamaModels,
+  });
+});
+
+// /api/show endpoint (POST)
 app.post("/api/show", (req, res) => {
   const modelId = req.body?.model || "k2";
-
   // Find the model in available models
   const foundModel = availableModels.find((m) => m.model === modelId);
   const modelName = foundModel ? foundModel.name : "Kimi";
+  const architecture = "kimi";
+  const contextLength = 200000;
 
   res.json({
     template: "{{ .System }}{{ .Prompt }}",
     capabilities: ["vision", "tools"],
     details: {
-      family: "kimi",
+      family: architecture,
       name: modelName,
       description: foundModel ? foundModel.description : "Kimi AI model proxy",
     },
     model_info: {
       "general.basename": modelName,
-      "general.architecture": "kimi",
+      "general.architecture": architecture,
       "general.name": modelName,
-      "kimi.context_length": 200000,
+      [`${architecture}.context_length`]: contextLength,
+      "limits.max_prompt_tokens": contextLength - 4096,
+      "limits.max_output_tokens": 4096,
     },
   });
 });
