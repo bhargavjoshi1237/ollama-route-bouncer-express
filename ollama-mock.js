@@ -9,7 +9,8 @@ import { fileURLToPath } from "url";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Increase payload size limit to 50mb
+app.use(express.json({ limit: "50mb" }));
 
 // Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -337,19 +338,35 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
     if (folder_id) {
       activeProfile.folder_id = folder_id;
     }
+    const timestamp = Date.now();
     const newChatHeaders = {
       ...activeProfile.headers,
-      accept: "application/json",
+      accept: "*/*",
       "accept-language": "en-US,en;q=0.9",
       authorization: QWEN_AUTH_TOKEN,
       "content-type": "application/json",
+      "bx-ua": `defaultFY2_load_failed with timeout@@https://chat.qwen.ai/c/new-chat@@${timestamp}`,
+      "bx-umidtoken": `defaultFY2_load_failed with timeout@@https://chat.qwen.ai/c/new-chat@@${timestamp}`,
+      "bx-v": "2.5.31",
+      "cache-control": "no-cache",
+      "pragma": "no-cache",
+      "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\"",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin",
+      "source": "web",
+      "timezone": new Date().toString().replace(/GMT[+-]\d{4}/, "GMT+0530"),
+      "x-accel-buffering": "no",
+      "x-request-id": uuidv4(),
     };
     const newChatBody = JSON.stringify({
       title: "New Chat",
-      models: ["qwen3-235b-a22b"],
+      models: ["qwen3-coder-plus"],
       chat_mode: "normal",
       chat_type: "t2t",
-      timestamp: Date.now(),
+      timestamp: timestamp,
     });
     try {
       const resp = await fetch("https://chat.qwen.ai/api/v2/chats/new", {
@@ -407,70 +424,418 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
   const conversationState = new Map();
 
   // Mock Ollama API endpoints for Copilot integration
-  app.get("/api/tags", (req, res) => {
-    res.json({
-      models: [
-        {
-          name: "qwen3-normal",
-          model: "qwen3-normal",
-          display_name: "Qwen3 Normal",
-          tags: ["normal", "standard"],
-          modified_at: new Date().toISOString(),
-          size: 235000000000,
-          digest: "sha256:mock-digest-normal",
-          details: {
-            parent_model: "",
-            format: "gguf",
-            family: "qwen",
-            families: ["qwen"],
-            parameter_size: "235B",
-            quantization_level: "Q4_0",
-            description: "Standard Qwen3 model for normal responses",
-          },
-        },
-        {
-          name: "qwen3-thinking",
-          model: "qwen3-thinking", 
-          display_name: "Qwen3 Thinking",
-          tags: ["thinking", "reasoning", "cot"],
-          modified_at: new Date().toISOString(),
-          size: 235000000000,
-          digest: "sha256:mock-digest-thinking",
-          details: {
-            parent_model: "",
-            format: "gguf",
-            family: "qwen",
-            families: ["qwen"],
-            parameter_size: "235B",
-            quantization_level: "Q4_0",
-            description: "Qwen3 model with visible thinking process and reasoning",
-          },
-        },
-      ],
-    });
+  app.get("/api/version", (req, res) => {
+    res.json({ version: "0.6.4" });
   });
 
+  // /api/tags endpoint (GET)
+  app.get("/api/tags", (req, res) => {
+    const models = [
+      {
+        name: "qwen3-normal",
+        model: "qwen3-normal",
+        display_name: "Qwen 3 235B-A22B-2507 (Web)",
+        tags: ["normal", "standard"],
+        modified_at: new Date().toISOString(),
+        size: 235000000000,
+        digest: "sha256:mock-digest-normal",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "235B",
+          quantization_level: "Q4_0",
+          description: "Standard Qwen3 model for normal responses",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 32768,
+        "limits.max_prompt_tokens": 32768 - 4096,
+        "limits.max_output_tokens": 4096,
+      },
+      {
+        name: "qwen3-thinking",
+        model: "qwen3-thinking",
+        display_name: "Qwen 3 235B-A22B-2507 Thinking (Web)",
+        tags: ["thinking", "reasoning", "cot"],
+        modified_at: new Date().toISOString(),
+        size: 235000000000,
+        digest: "sha256:mock-digest-thinking",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "235B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 model with visible thinking process and reasoning",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 32768,
+        "limits.max_prompt_tokens": 32768 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-coder-plus",
+        model: "qwen3-coder-plus",
+        display_name: "Qwen3 Coder Plus (Web)",
+        tags: ["coder", "plus"],
+        modified_at: new Date().toISOString(),
+        size: 120000000000,
+        digest: "sha256:mock-digest-coder-plus",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "120B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 Coder Plus model",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 65536,
+        "limits.max_prompt_tokens": 65536 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-30b-a3b",
+        model: "qwen3-30b-a3b",
+        display_name: "Qwen3 30B A3B (Web)",
+        tags: ["30b", "a3b"],
+        modified_at: new Date().toISOString(),
+        size: 30000000000,
+        digest: "sha256:mock-digest-30b-a3b",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "30B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 30B A3B model (non-thinking version)",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096
+      },
+      {
+        name: "qwen3-30b-a3b-thinking",
+        model: "qwen3-30b-a3b-thinking",
+        display_name: "Qwen3 30B A3B Thinking (Web)",
+        tags: ["30b", "a3b", "thinking"],
+        modified_at: new Date().toISOString(),
+        size: 30000000000,
+        digest: "sha256:mock-digest-30b-a3b-thinking",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "30B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 30B A3B model with thinking capability",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-coder-30b-a3b-instruct",
+        model: "qwen3-coder-30b-a3b-instruct",
+        display_name: "Qwen3 Coder 30B A3B Instruct (Web)",
+        tags: ["coder", "30b", "a3b", "instruct"],
+        modified_at: new Date().toISOString(),
+        size: 30000000000,
+        digest: "sha256:mock-digest-coder-30b-a3b-instruct",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "30B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 Coder 30B A3B Instruct model",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      }
+    ];
+    res.json({ models });
+  });
+
+  // /api/tags endpoint (POST)
+  app.post("/api/tags", (req, res) => {
+    // Same as GET
+    const models = [
+      {
+        name: "qwen3-normal",
+        model: "qwen3-normal",
+        display_name: "Qwen 3 235B-A22B-2507 (Web)",
+        tags: ["normal", "standard"],
+        modified_at: new Date().toISOString(),
+        size: 235000000000,
+        digest: "sha256:mock-digest-normal",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "235B",
+          quantization_level: "Q4_0",
+          description: "Standard Qwen3 model for normal responses",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 32768,
+        "limits.max_prompt_tokens": 32768 - 4096,
+        "limits.max_output_tokens": 4096,
+      },
+      {
+        name: "qwen3-thinking",
+        model: "qwen3-thinking",
+        display_name: "Qwen3 Thinking (WEB)",
+        tags: ["thinking", "reasoning", "cot"],
+        modified_at: new Date().toISOString(),
+        size: 235000000000,
+        digest: "sha256:mock-digest-thinking",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "235B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 model with visible thinking process and reasoning",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 32768,
+        "limits.max_prompt_tokens": 32768 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-coder-plus",
+        model: "qwen3-coder-plus",
+        display_name: "Qwen3 Coder Plus",
+        tags: ["coder", "plus"],
+        modified_at: new Date().toISOString(),
+        size: 120000000000,
+        digest: "sha256:mock-digest-coder-plus",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "120B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 Coder Plus model",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 65536,
+        "limits.max_prompt_tokens": 65536 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-30b-a3b",
+        model: "qwen3-30b-a3b",
+        display_name: "Qwen3 30B A3B",
+        tags: ["30b", "a3b"],
+        modified_at: new Date().toISOString(),
+        size: 30000000000,
+        digest: "sha256:mock-digest-30b-a3b",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "30B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 30B A3B model (non-thinking version)",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096
+      },
+      {
+        name: "qwen3-30b-a3b-thinking",
+        model: "qwen3-30b-a3b-thinking",
+        display_name: "Qwen3 30B A3B Thinking",
+        tags: ["30b", "a3b", "thinking"],
+        modified_at: new Date().toISOString(),
+        size: 30000000000,
+        digest: "sha256:mock-digest-30b-a3b-thinking",
+        details: {
+          parent_model: "",
+          format: "gguf",
+          family: "qwen",
+          families: ["qwen"],
+          parameter_size: "30B",
+          quantization_level: "Q4_0",
+          description: "Qwen3 30B A3B model with thinking capability",
+        },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      }
+    ];
+    res.json({ models });
+  });
+
+  // /api/show endpoint (POST)
   app.post("/api/show", (req, res) => {
     const modelId = req.body?.model || "qwen3-normal";
-    const isThinking = modelId.includes("thinking");
-    const modelName = isThinking ? "Qwen3 (Thinking)" : "Qwen3 (Normal)";
-    
+    let model;
+    // Find the model in the list above
+    const allModels = [
+      {
+        name: "qwen3-normal",
+        model: "qwen3-normal",
+        display_name: "Qwen 3 235B-A22B-2507 (Web)",
+        tags: ["normal", "standard"],
+        details: { description: "Standard Qwen3 model for normal responses" },
+        "general.architecture": "qwen",
+        "qwen.context_length": 32768,
+        "limits.max_prompt_tokens": 32768 - 4096,
+        "limits.max_output_tokens": 4096,
+      },
+      {
+        name: "qwen3-thinking",
+        model: "qwen3-thinking",
+        display_name: "Qwen 3 235B-A22B-2507 Thinking (Web)",
+        tags: ["thinking", "reasoning", "cot"],
+        details: { description: "Qwen3 model with visible thinking process and reasoning" },
+        "general.architecture": "qwen",
+        "qwen.context_length": 32768,
+        "limits.max_prompt_tokens": 32768 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-coder-plus",
+        model: "qwen3-coder-plus",
+        display_name: "Qwen3 Coder Plus (Web)",
+        tags: ["coder", "plus"],
+        details: { description: "Qwen3 Coder Plus model" },
+        "general.architecture": "qwen",
+        "qwen.context_length": 65536,
+        "limits.max_prompt_tokens": 65536 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-30b-a3b",
+        model: "qwen3-30b-a3b",
+        display_name: "Qwen3 30B A3B (Web)",
+        tags: ["30b", "a3b"],
+        details: { description: "Qwen3 30B A3B model (non-thinking version)" },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096
+      },
+      {
+        name: "qwen3-30b-a3b-thinking",
+        model: "qwen3-30b-a3b-thinking",
+        display_name: "Qwen3 30B A3B Thinking (Web)",
+        tags: ["30b", "a3b", "thinking"],
+        details: { description: "Qwen3 30B A3B model with thinking capability" },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      },
+      {
+        name: "qwen3-coder-30b-a3b-instruct",
+        model: "qwen3-coder-30b-a3b-instruct",
+        display_name: "Qwen3 Coder 30B A3B Instruct (Web)",
+        tags: ["coder", "30b", "a3b", "instruct"],
+        details: { description: "Qwen3 Coder 30B A3B Instruct model" },
+        "general.architecture": "qwen",
+        "qwen.context_length": 81920,
+        "limits.max_prompt_tokens": 81920 - 4096,
+        "limits.max_output_tokens": 4096,
+        "feature_config": {
+          "thinking_enabled": true,
+          "output_schema": "phase",
+          "thinking_budget": 81920
+        }
+      }
+    ];
+    model = allModels.find(m => m.model === modelId) || allModels[0];
+    const isThinking = model.tags && model.tags.includes("thinking");
+    const modelName = model.display_name;
+    const architecture = model["general.architecture"];
+    const contextLength = model["qwen.context_length"];
+
     res.json({
       template: "{{ .System }}{{ .Prompt }}",
       capabilities: ["vision", "tools"],
       details: {
-        family: "qwen",
+        family: architecture,
         thinking_enabled: isThinking,
         name: modelName,
-        description: isThinking 
-          ? "Qwen3 model with visible thinking process and reasoning"
-          : "Standard Qwen3 model for normal responses"
+        description: model.details.description,
       },
       model_info: {
         "general.basename": modelName,
-        "general.architecture": "qwen",
+        "general.architecture": architecture,
         "general.name": modelName,
-        "qwen.context_length": 32768,
+        [`${architecture}.context_length`]: contextLength,
+        "limits.max_prompt_tokens": model["limits.max_prompt_tokens"],
+        "limits.max_output_tokens": model["limits.max_output_tokens"],
+        ...(model.feature_config ? { "feature_config": model.feature_config } : {}),
         "qwen.thinking_enabled": isThinking,
       },
     });
@@ -762,19 +1127,7 @@ async function assignChatToFolder(profile, chat_id, folder_id) {
 
   app.listen(PORT, HOST, () => {
     console.log(`🚀 Server running at http://${HOST}:${PORT}`);
-    console.log(
-      "\n====================\n" +
-        "Copilot Chat Integration Steps:\n" +
-        "1. Open Copilot Chat.\n" +
-        "2. Go to the models section.\n" +
-        "3. Click 'Manage Model'.\n" +
-        "4. Click 'Ollama'.\n" +
-        "5. Select either:\n" +
-        "   - 'Qwen3' for normal responses\n" +
-        "   - 'Qwen3 (Thinking)' for thinking responses\n" +
-        "6. Start chatting!\n" +
-        "====================\n"
-    );
-    console.log("✅ You are free to use Copilot Chat as described above.");
+    console.log("✅ You are free to use Copilot Chat.");
   });
 })();
+
