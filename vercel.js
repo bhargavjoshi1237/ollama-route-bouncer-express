@@ -227,6 +227,12 @@ const PORT = process.env.PORT || 11434; // Use different port to avoid conflicts
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// Debug: log all incoming requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Ollama model registry for compatibility
 const ollamaModels = SUPPORTED_MODELS.map((m) => ({
   ...m,
@@ -248,35 +254,53 @@ const ollamaModels = SUPPORTED_MODELS.map((m) => ({
 
 // /api/tags endpoint (GET) - List available models
 app.get("/api/tags", (req, res) => {
+  console.log("Received /api/tags GET request");
   res.json({ models: ollamaModels });
 });
 
 // /api/tags endpoint (POST) - List available models (Ollama compatibility)
 app.post("/api/tags", (req, res) => {
+  console.log("Received /api/tags POST request");
   res.json({ models: ollamaModels });
+});
+
+// /api/version endpoint for Ollama compatibility
+app.get("/api/version", (req, res) => {
+  // Return a fixed version string compatible with Copilot's minimum requirement
+  res.json({ version: "0.6.4" });
 });
 
 // /api/show endpoint (POST) - Get model info
 app.post("/api/show", (req, res) => {
+  // console.log("Received /api/show POST request:", );
   const modelId = req.body?.model || SUPPORTED_MODELS[0].model;
   const foundModel = ollamaModels.find(
     (m) => m.model === modelId || m.name === modelId
   );
+
+  // Determine architecture and context length
+  const architecture = foundModel ? foundModel.tags[0] : "amazon";
+  const displayName = foundModel ? foundModel.display_name : modelId;
+  const contextLength = 128000;
+
   res.json({
     template: "{{ .System }}{{ .Prompt }}",
     capabilities: ["vision", "tools"],
     details: {
-      family: foundModel ? foundModel.tags[0] : "amazon",
-      name: foundModel ? foundModel.display_name : modelId,
+      family: architecture,
+      name: displayName,
       description: foundModel
         ? foundModel.details.description
         : "Amazon Nova model proxy via Vercel AI",
     },
     model_info: {
-      "general.basename": foundModel ? foundModel.display_name : modelId,
-      "general.architecture": foundModel ? foundModel.tags[0] : "amazon",
-      "general.name": foundModel ? foundModel.display_name : modelId,
-      "amazon.context_length": 128000,
+      "general.basename": displayName,
+      "general.architecture": architecture,
+      "general.name": displayName,
+      [`${architecture}.context_length`]: contextLength,
+      // Add limits for compatibility
+      "limits.max_prompt_tokens": contextLength - 4096,
+      "limits.max_output_tokens": 4096,
     },
   });
 });
