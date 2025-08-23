@@ -735,8 +735,11 @@ function parseHeadersFile(pathp) {
     console.error("Failed to fetch models, using defaults");
   }
 
-  const PORT = 11434;
-  const HOST = "localhost";
+  // const PORT = 11434;
+  // const HOST = "localhost";
+
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 11434;
+  const HOST = process.env.HOST || "0.0.0.0";
 
   app.listen(PORT, HOST, () => {
     console.log(`Kimi Proxy (autostart) running at http://${HOST}:${PORT}`);
