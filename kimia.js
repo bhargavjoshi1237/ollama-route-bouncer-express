@@ -167,7 +167,7 @@ async function listChats(profile) {
 
 // Mock Ollama API endpoints
 app.get("/api/version", (req, res) => {
-  res.json({ version: "0.6.4" });
+  res.json({ version: "0.11.6" });
 });
 
 // /api/tags endpoint (GET)
