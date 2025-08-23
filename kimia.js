@@ -7,6 +7,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
+// Log every request with method, URL, and request details
+app.use((req, res, next) => {
+  const details = {
+    query: req.query,
+    body: req.body
+  };
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} request received`, details);
+  next();
+});
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -340,6 +349,7 @@ app.post("/api/show", (req, res) => {
 });
 
 app.post("/v1/chat/completions", async (req, res) => {
+  console.log(`[${new Date().toISOString()}] Request received for /v1/chat/completions`);
   const requestStart = Date.now();
   stats.totalRequests++;
   stats.currentRequests++;
